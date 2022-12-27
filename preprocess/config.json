@@ -1,0 +1,13 @@
+{
+    "range_m":[100,50],
+    "resolution":[201,101], 
+    "real_size":0.5,
+    "adaptor_choice":"adaptor3",
+    "adder":"adder1",
+    "reprocessor":"reprocessor1",
+    "label_to_algorithm":
+    {
+	"car":"algorithm_default",
+        "default":"algorithm_default"
+    }
+}
