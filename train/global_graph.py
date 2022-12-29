@@ -49,6 +49,7 @@ class GCNModule(nn.Module):
     def __init__(self, num_layers, hidden_size):
         super().__init__()
         self.net_list = nn.ModuleList([])
+        self.norm = nn.LayerNorm(hidden_size)
 
         for _ in range(num_layers):
             self.net_list.append(GCNBlock(hidden_size))
@@ -57,7 +58,7 @@ class GCNModule(nn.Module):
         
         for layer in self.net_list:
             lane_feat = layer(lane_feat, nbr_mat, pred_mat, succ_mat, mask) #[batch, num, hidden]
-            #lane_feat = F.normalize(lane_feat, p=2, dim=1)
+            lane_feat = self.norm(lane_feat)
 
         return lane_feat
 
@@ -109,15 +110,21 @@ class AttentionNet(nn.Module):
     update agent features by lane features
     get agent interactions
     """
-    def __init__(self, q_channels, k_channels, out_channels, head=4):
+    def __init__(self, q_channels, k_channels, out_channels, head=8):
         super().__init__()
 
         self.layer = AttentionLayer(q_channels, k_channels, out_channels, head)
         self.norm = nn.LayerNorm(out_channels)
-        self.fc = MLP(out_channels, out_channels, out_channels)
+        #self.fc = MLP(out_channels, out_channels, out_channels)
+        self.fc = nn.Linear(out_channels, out_channels)
+        self.downsample = None
+        if q_channels != out_channels:
+            self.downsample = nn.Linear(q_channels, out_channels)
 
     def forward(self, query, key, value, mask):
 
         output = self.layer(query, key, value, mask)
-        output = self.fc(self.norm(output))
+        if self.downsample:
+            query = self.downsample(query)
+        output = self.norm(self.fc(output) + query)
         return output
