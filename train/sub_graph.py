@@ -12,11 +12,12 @@ class ActorNet(nn.Module):
     """
     Actor feature extractor with Conv1D
     """
-    def __init__(self, n_in):
+    def __init__(self, n_in, hidden_size):
         super(ActorNet, self).__init__()
 
         self.n_in = n_in
-        n_out = [16, 32, 64]
+        self.hidden_size = hidden_size
+        n_out = [hidden_size // 4, hidden_size // 2, hidden_size]
         blocks = [Res1d, Res1d, Res1d]
         num_blocks = [2, 2, 2]
 
@@ -37,15 +38,10 @@ class ActorNet(nn.Module):
 
         lateral = []
         for i in range(len(n_out)):
-            lateral.append(Conv1d(n_out[i], 64, act=False))
+            lateral.append(Conv1d(n_out[i], hidden_size, act=False))
         self.lateral = nn.ModuleList(lateral)
 
-        self.output = Res1d(64, 64)
-
-        self.lstm = nn.LSTM(input_size=64, hidden_size=64, num_layers=1, batch_first=True)
-        for param in self.lstm._flat_weights_names:
-            if "weight" in param:
-                nn.init.xavier_uniform_(self.lstm._parameters[param])
+        self.output = Res1d(hidden_size, hidden_size)
 
 
     def forward(self, actors, mask):
@@ -65,12 +61,8 @@ class ActorNet(nn.Module):
             l_out += self.lateral[i](outputs[i])
         
         feat = l_out[:, :, -1] 
-        #feat_l, _ = self.lstm(l_out.transpose(1, 2))
-        #feat_l = feat_l[:, -1]
-        #feat = feat_f + feat_l
-        
-        feat = feat.reshape(-1, 15, 64) #[batch, 15, 64]
-        #feat = F.normalize(feat, p=2.0, dim=1)
+        feat = feat.reshape(-1, 15, self.hidden_size) #[batch, 15, hidden]
+
         indices = (mask[:, :, -1] == False)
         feat[indices] = 0
         return feat
@@ -80,7 +72,7 @@ class SubGraph(nn.Module):
     Subgraph that computes all vectors in a polyline, and get a polyline-level feature
     """
 
-    def __init__(self, in_channels, num_subgraph_layres=3, hidden_unit=64):
+    def __init__(self, in_channels, num_subgraph_layres=3, hidden_unit=128):
         super(SubGraph, self).__init__()
         self.hidden_unit = hidden_unit
         self.in_channels = in_channels
@@ -92,6 +84,7 @@ class SubGraph(nn.Module):
             in_channels = hidden_unit * 2
 
         self.linear = nn.Linear(hidden_unit * 2, hidden_unit)
+        self.norm = nn.LayerNorm(hidden_unit)
         self.linear.apply(self._init_weights)
 
     @staticmethod
@@ -115,17 +108,15 @@ class SubGraph(nn.Module):
 
         feats = self.linear(feats) #[batch, num, len, dim]
         agg_data, _ = torch.max(feats, dim=2) #[batch, num, dim]
-        
-        agg_data = F.normalize(agg_data, p=2.0, dim=1)
+
+        agg_data = self.norm(agg_data)
         indices = (mask[:, :, -1] == False)
         agg_data[indices] = 0 
         return agg_data
 
 class MLP(nn.Module):
-    def __init__(self, in_channel, out_channel, hidden=64):
+    def __init__(self, in_channel, out_channel, hidden=128):
         super(MLP, self).__init__()
-
-
         act_layer = nn.ReLU
         norm_layer = nn.LayerNorm
 
