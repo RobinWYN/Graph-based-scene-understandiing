@@ -18,7 +18,7 @@ class VectorNetBackbone(nn.Module):
                  in_chn_agent=6,
                  in_chn_lane=8,
                  num_subgraph_layers=3,
-                 hidden_size=64,):
+                 hidden_size=128,):
         super(VectorNetBackbone, self).__init__()
         # some params
         self.hidden_size = hidden_size
@@ -31,7 +31,7 @@ class VectorNetBackbone(nn.Module):
         #self.subgraph_agent = ActorNet(in_chn_agent)
 
         #GCN
-        self.gcn = GCNModule(num_layers=3, hidden_size=hidden_size)
+        #self.gcn = GCNModule(num_layers=3, hidden_size=hidden_size)
 
         # agent_lane
         self.al_interation = AttentionNet(hidden_size, hidden_size, hidden_size)
@@ -61,9 +61,8 @@ class VectorNetBackbone(nn.Module):
         sub_graph_lane = self.subgraph_lane(lane_feat, lane_mask)
         sub_graph_agent = self.subgraph_agent(traj_feat, traj_mask)
         #sub_graph_agent = self.subgraph_agent(traj_feat.reshape(-1, 19, 6), traj_mask)
-        graph_feat = self.gcn(sub_graph_lane, nbr_mat, pred_mat, succ_mat, lane_mask)
-        #identifier, _ = torch.min(lane_feat[:, :, :, :2], dim=-2) #[batch, num, 2]
-        #graph_feat = sub_graph_lane 
+        #graph_feat = self.gcn(sub_graph_lane, nbr_mat, pred_mat, succ_mat, lane_mask)
+        graph_feat = sub_graph_lane 
         #[batch, num, hidden]
 
         agent_lane = self.al_interation(sub_graph_agent, graph_feat, graph_feat, lane_mask)
