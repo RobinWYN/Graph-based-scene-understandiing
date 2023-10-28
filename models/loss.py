@@ -40,3 +40,28 @@ class ClsLoss(nn.Module):
     def forward(self, pred, gt):
         loss = self.cls_loss(pred, gt)
         return loss
+    
+    
+class PreTrainLoss(nn.Module):
+    def __init__(self, alpha):
+        super().__init__()
+        self.alpha = alpha
+        
+    def anchor_loss(self, preds, gt):
+        num_preds = preds.shape[1]
+        anchors = gt[..., -1, :].unsqueeze(1).repeat(1, num_preds, 1)
+        loss, _ = torch.min(torch.norm(preds - anchors, p=2, dim=-1), dim=-1) # without harming multi-modality
+        return loss
+    
+    def VIF_los(self, preds, gt_vif):
+        #TODO: implement this loss method
+        loss = 0
+        return loss
+    
+    def forward(self, preds, gt, vif):
+        loss_a = self.anchor_loss(preds, gt)
+        loss_v = self.VIF_loss(preds, vif)
+        loss = loss_a + self.alpha * loss_v
+        return loss
+        
+        
