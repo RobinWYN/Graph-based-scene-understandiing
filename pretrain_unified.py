@@ -24,62 +24,11 @@ from preprocess.preprocess_HighD import test
 from argument_parser import args
 from visualization.visualization import training_plot
 
+from dataset.dataset import ArgDataArgo, ArgDataHighD, ArgDataV2
+
 NUM_DATA_PACK = 133
 NUM_DATA = 8000
 DATA_DIR = "../highD/highD_pkl_1-51_large"
-
-
-class ArgData(Dataset):
-    def __init__(self, raw_path, split, ind: np.ndarray = Any):
-        super().__init__()
-        self.raw_path = raw_path
-        self.data = []
-        self.split = split
-        train_num = 80
-
-        if split == "train":
-            for i in ind[:train_num]:
-                path = self.raw_path + str(i) + ".pkl"
-                with open(path, "rb") as f:
-                    data = torch.load(f)
-                self.data += data
-
-            print("training data loaded successfully")
-
-        else:
-            for i in ind[train_num:]:
-                path = self.raw_path + str(i) + ".pkl"
-                with open(path, "rb") as f:
-                    data = torch.load(f)
-                self.data += data
-            print("validation data loaded successfully")
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        s_data = self.data[index]
-        return s_data
-
-
-class ArgDataV2(Dataset):
-    def __init__(self, raw_path: str = Any):
-        super().__init__()
-        self.raw_path = raw_path
-        self.data = []
-        for i in range(NUM_DATA_PACK):
-            path = self.raw_path + str(i) + ".pkl"
-            with open(path, "rb") as f:
-                data = torch.load(f)
-            self.data += data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        s_data = self.data[index]
-        return s_data
-
 
 def confusion_matrix(preds, labels, conf_matrix):
     for p, t in zip(preds, labels):
@@ -104,11 +53,11 @@ def train(
     check_path = "./data/"
 
     raw_path_train = DATA_DIR + "/HighD_VIFGNN_"
-    train_data = ArgData(raw_path_train, "train", ind)
+    train_data = ArgDataArgo(raw_path_train, "train", ind)
     train_iter = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
     raw_path_val = DATA_DIR + "/HighD_VIFGNN_"
-    val_data = ArgData(raw_path_val, "val", ind)
+    val_data = ArgDataArgo(raw_path_val, "val", ind)
     val_iter = DataLoader(val_data, batch_size=batch_size, shuffle=False)
     """
     raw_path = '/home/xyn/highD_pkl_1-51/HighD_VIFGNN_'

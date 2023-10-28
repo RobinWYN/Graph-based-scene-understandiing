@@ -1,0 +1,13 @@
+{
+    "conf": "config/config.json", 
+    "epochs": 100, 
+    "lr": 5e-05, 
+    "batch_size": 256, 
+    "schedule": "linear", 
+    "log_dir": "experiments", 
+    "tag": "VIFGNN", 
+    "device": "cuda",
+    "model": {
+        
+    }
+}

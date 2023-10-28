@@ -10,6 +10,7 @@ from argoverse.utils.interpolate import interp_arc
 
 from tqdm import tqdm
 
+
 def preprocess(am, raw_path, radius, max_num_agent, max_num_lane):
     df = pd.read_csv(raw_path)
     # filter out actors that are unseen during the historical time steps
@@ -201,7 +202,9 @@ def preprocess(am, raw_path, radius, max_num_agent, max_num_lane):
         'ground_truth': gt
     }
 
-def Get_PreData(am, raw_paths):
+
+def Get_PreData(am, raw_paths, split):
+    base_dir = '../argoverse1/arg_data/'
     path = pathlib.Path.cwd().parent.joinpath(raw_paths)
     data = []
 
@@ -209,12 +212,15 @@ def Get_PreData(am, raw_paths):
         data.append(preprocess(am, raw_path, radius=50, max_num_agent=15, max_num_lane=40))
 
         if idx % 100 == 99:
-            with open('/data/arg_data/val_field/val' + str(idx // 100) + '.pkl','wb') as f:
+            pathlib.Path(base_dir + split).mkdir(parents=True, exist_ok=True)
+            with open(base_dir + split + str(idx // 100) + '.pkl','wb') as f:
                 torch.save(data, f)
             data = []
 
-raw_paths = './arg_data/val/data'
-am = ArgoverseMap()
 
-Get_PreData(am, raw_paths)
+if __name__ == "__main__":
+    raw_paths = '../argoverse1/train/data'
+    #raw_paths = '/argoverse1'
+    am = ArgoverseMap()
+    Get_PreData(am, raw_paths, 'train')
     
