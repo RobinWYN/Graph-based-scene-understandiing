@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import trange
 
 from transformers import get_linear_schedule_with_warmup
-from backbone import VectorNetBackbone
+from models.backbone import VectorNetBackbone
 
 class ArgData(Dataset):
     def __init__(self, raw_path, split):

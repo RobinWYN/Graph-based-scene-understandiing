@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 
-from sub_graph import SubGraph
-from sub_graph import ActorNet
-from sub_graph import MLP
-from global_graph import GCNModule
-from global_graph import AttentionNet
+from models.sub_graph import SubGraph
+from models.sub_graph import ActorNet
+from models.sub_graph import MLP
+from models.global_graph import GCNModule
+from models.global_graph import AttentionNet
 
 
 class VectorNetBackbone(nn.Module):

@@ -2,34 +2,34 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.utils import init_weights
 
-from matplotlib import pyplot as plt
-import time
-import os
-import pickle as pkl
 
-from decoder import PredNet
-from sub_graph import SubGraph
+from models.decoder import PredNet, BehaviorClsNet
+from models.sub_graph import SubGraph
 
 
 class LSTM(nn.Module):
         """
         LSTM baseline
         """
-        def __init__(self, device, in_chn_agent=6, in_chn_lane=8, hidden_size=64, num_subgraph_layers=1, lstm_layers=2, dropout=0.3):
+        def __init__(self, device, in_chn_agent=6, in_chn_lane=8, hidden_size=64, num_subgraph_layers=2, lstm_layers=2, dropout=0.3):
                 super(LSTM, self).__init__()
                 self.device = device
                 # subgraph feature extractor
-                self.subgraph_lane = SubGraph(in_chn_lane, num_subgraph_layers, hidden_size) 
-                self.subgraph_agent = SubGraph(in_chn_agent, num_subgraph_layers, hidden_size)
+                self.subgraph_lane = SubGraph('lane', in_chn_lane, num_subgraph_layers, hidden_size) 
+                self.subgraph_agent = SubGraph('agent', in_chn_agent, num_subgraph_layers, hidden_size)
                 
                 self.agent_lstm = nn.LSTM(input_size=hidden_size, 
                                           hidden_size=hidden_size, 
                                           num_layers=lstm_layers, 
                                           batch_first=True, 
                                           dropout=dropout)
-                self.decoder = PredNet()
+                #self.decoder = PredNet()
+                self.decoder = BehaviorClsNet()
                 self.linear = nn.Linear(hidden_size, hidden_size)
+                
+                self.apply(init_weights)
                 
         
         def forward(self, data):
@@ -44,8 +44,8 @@ class LSTM(nn.Module):
                 target_feat = self.linear(agent_feat)
                 
                 target_feat = target_feat[:,-1,:] #[batch, hidden]
-                pred_traj, pred_cls = self.decoder(target_feat)
-                return pred_traj, pred_cls
+                pred_cls = self.decoder(target_feat)
+                return pred_cls
 
 
 
@@ -62,7 +62,8 @@ class LSTM_interact(nn.Module):
                 self.subgraph_agent = SubGraph(in_chn_agent, num_subgraph_layers, hidden_size)
                 
                 self.agent_lstm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=lstm_layers, batch_first=True, dropout=dropout)
-                self.lane_lstm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=lstm_layers, batch_first=True, dropout=dropout)
+                self.lane_l
+                stm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=lstm_layers, batch_first=True, dropout=dropout)
                 
                 self.al_interaction = AttentionLayer(hidden_size, hidden_size, hidden_size, num_head)
                 self.aa_interaction = AttentionLayer(hidden_size+1, hidden_size+1, hidden_size, num_head)
@@ -70,6 +71,8 @@ class LSTM_interact(nn.Module):
                 self.decoder = PredNet()
                 
                 self.token = nn.Parameter(torch.Tensor(15, 1))
+                
+                self.apply(init_weights)
                 nn.init.normal_(self.token, mean=0., std=.02)
         
         def forward(self, data):
@@ -112,6 +115,8 @@ class AttentionLayer(nn.Module):
                 self.fc = nn.Linear(embed_size, embed_size)
                 self.dk = 1 + int(np.sqrt(embed_size))
                 
+                self.apply(init_weights)
+                
                       
         def forward(self, query, key, value, mask=None):
                 Querys = torch.stack(torch.split(self.Q(query), self.split, dim=-1), dim = 0)
@@ -146,6 +151,8 @@ class TransformerBlock(nn.Module):
                 self.norm1 = nn.LayerNorm(embed_size)
                 self.norm2 = nn.LayerNorm(embed_size)
                 self.dropout = nn.Dropout(dropout)
+                
+                self.apply(init_weights)
                 
                       
         def forward(self, query, key, value, mask):
@@ -206,6 +213,7 @@ class Decoder(nn.Module):
                         [DecoderBlock(num_input_f, num_output_f, num_head, expansion, dropout)
                         for _ in range(num_layers)]
                 )
+                self.apply(init_weights)
                 
                      
         def forward(self, output, input_enc, src_mask, mask):
@@ -218,7 +226,7 @@ class Decoder(nn.Module):
 
 
 class Transformer(nn.Module):
-        def __init__(self, device, num_subgraph_layers=2, hidden_size=64, 
+        def __init__(self, hyperparams, device, num_subgraph_layers=2, hidden_size=64, 
                      in_chn_agent=6, in_chn_lane=8, enc_layers=2, dec_layers=2, num_head=4, expansion=8, dropout=0):
                 """
                 num_input_f: input feature dimension
@@ -230,8 +238,8 @@ class Transformer(nn.Module):
                 self.hidden = hidden_size
                 self.device = device
                 
-                self.subgraph_lane = SubGraph(in_chn_lane, num_subgraph_layers, hidden_size)
-                self.subgraph_agent = SubGraph(in_chn_agent, num_subgraph_layers, hidden_size)
+                self.subgraph_lane = SubGraph('lane', in_chn_lane, num_subgraph_layers, hidden_size)
+                self.subgraph_agent = SubGraph('agent', in_chn_agent, num_subgraph_layers, hidden_size)
                 
                 self.token = nn.Parameter(torch.Tensor(40, 1))
                 nn.init.normal_(self.token, mean=0., std=.02)
@@ -241,7 +249,11 @@ class Transformer(nn.Module):
                 self.linear = nn.Linear(hidden_size, hidden_size)
                 
                 self.aa_interaction = AttentionLayer(hidden_size+1, hidden_size+1, hidden_size, num_head)
-                self.decoder = PredNet(hidden_size)
+                
+                #self.decoder = PredNet(hidden_size)
+                self.decoder = BehaviorClsNet()
+                
+                self.apply(init_weights)
                 
                       
         def forward(self, data):
@@ -249,6 +261,7 @@ class Transformer(nn.Module):
                 Transformer output: 'target_feat' shaping (batch_size,hidden_size)
                 output shall be futher sent into PredNet
                 """
+                # data list
                 lane_feat = data["lane_feat"].to(self.device) #[64, 40, 19, 8]
                 traj_feat = data["traj_feat"].to(self.device) #[64, 15, 19, 6]
                 lane_mask = data["lane_mask"].to(self.device) #[64, 40] 
@@ -256,11 +269,10 @@ class Transformer(nn.Module):
                 nbr_mat = data["nbr_mat"].to(self.device) #[64, 40, 40]
                 pred_mat = data["pred_mat"].to(self.device) #[64, 40, 40]
                 succ_mat = data["succ_mat"].to(self.device) #[64, 40, 40]
-                # data list
-                
+                agent_mask = (traj_mask[:, :, -1] == True)
+        
                 sub_graph_lane = self.subgraph_lane(lane_feat, lane_mask) #[64,40,64]
                 sub_graph_agent = self.subgraph_agent(traj_feat, traj_mask) #[64,15,64]
-                agent_mask = (traj_mask[:, :, -1] == True)
                 
                 out_enc = self.Transformer_enc(sub_graph_agent, agent_mask) #[64,15,64]
                 out_dec = self.Transformer_dec(sub_graph_lane, out_enc, lane_mask, agent_mask) 
@@ -274,6 +286,8 @@ class Transformer(nn.Module):
                 # from backbone
 
                 target_feat = target_feat.squeeze(1) #[batch, hidden]
-                pred_traj, pred_cls = self.decoder(target_feat)
+                pred_cls = self.decoder(target_feat)
                 
-                return pred_traj, pred_cls
+                return pred_cls
+        
+        

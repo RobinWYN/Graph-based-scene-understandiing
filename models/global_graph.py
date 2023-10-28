@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from sub_graph import MLP
+from models.sub_graph import MLP
 
 class GCNBlock(nn.Module):
     def __init__(self, hidden_size):
