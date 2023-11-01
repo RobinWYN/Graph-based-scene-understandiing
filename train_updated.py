@@ -90,7 +90,8 @@ def confusion_matrix(preds, labels, conf_matrix):
 def train(
     hyperparams,
     model_dir,
-    load_checkpoint=False
+    load_checkpoint=False,
+    check_path:Optional[str]=None
 ):
     epoch = hyperparams["epochs"]
     lr = hyperparams["lr"]
@@ -100,8 +101,6 @@ def train(
 
     ind = np.arange(NUM_DATA_PACK)
     np.random.shuffle(ind)
-
-    check_path = "./data/"
 
     raw_path_train = DATA_DIR + "/HighD_VIFGNN_"
     train_data = ArgData(raw_path_train, "train", ind)

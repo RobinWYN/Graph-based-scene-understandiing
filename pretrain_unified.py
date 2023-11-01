@@ -18,7 +18,7 @@ from transformers import get_linear_schedule_with_warmup
 from models.backbone_test import VectorNetBackbone
 #from baseline import Transformer, LSTM, LSTM_interact
 from models.baselines import Transformer, LSTM, LSTM_interact
-from models.loss import PredLoss, ClsLoss
+from models.loss import PredLoss, ClsLoss, PreTrainLoss
 
 from preprocess.preprocess_HighD import test
 from argument_parser import args
@@ -39,7 +39,8 @@ def confusion_matrix(preds, labels, conf_matrix):
 def train(
     hyperparams,
     model_dir,
-    load_checkpoint=False
+    load_checkpoint=False,
+    check_path: Optional[str] = None
 ):
     epoch = hyperparams["epochs"]
     lr = hyperparams["lr"]
@@ -49,8 +50,6 @@ def train(
 
     ind = np.arange(NUM_DATA_PACK)
     np.random.shuffle(ind)
-
-    check_path = "./data/"
 
     raw_path_train = DATA_DIR + "/HighD_VIFGNN_"
     train_data = ArgDataArgo(raw_path_train, "train", ind)
@@ -74,7 +73,7 @@ def train(
         model.load_state_dict(checkpoint)
 
     # loss = PredLoss()
-    loss = ClsLoss()
+    loss = PreTrainLoss(alpha=0.5)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-5)
 
     t_total = len(train_iter) * epoch
@@ -94,13 +93,11 @@ def train(
     # print(len(train_iter))
     # print(len(val_iter))
     loss_log = []
-    accuracy = []
 
     for ith_epoch in trange(epoch):
         model.train()
         for idx, batch in enumerate(train_iter):
             optimizer.zero_grad()
-
             gt = batch["ground_truth"].to(device)
             o_h = np.zeros((len(gt), 3))
             o_h[np.arange(len(gt)), gt.cpu().reshape(1, -1)] = 1
@@ -119,46 +116,20 @@ def train(
 
         model.eval()
         with torch.no_grad():
-            conf_matrix = torch.zeros(3, 3).cpu()
-            acc = 0
-            for idx, batch in enumerate(val_iter):
-                """
-                if idx == len(train_iter) - 1:
-                    break # can not exact divide here
-                """
-                gt = batch["ground_truth"].to(device)
-                # print(gt)
-                dec_cls = model(batch)
-                pred_result = torch.argmax(dec_cls, axis=-1).reshape(-1, 1)
+            ade = 0
+            fde = 0
+            for batch in val_iter:
+                gt = batch['ground_truth'].to(device)
+                pred_traj = model(batch)
+                ade += torch.norm(pred_traj - gt, p=2, dim=-1).mean(dim=-1).sum()
+                fde += torch.norm(pred_traj[:, -1] - gt[:, -1], p=2, dim=-1).sum()
 
-                # print("pred_result", pred_result)
-                # print("acc", torch.where(gt==pred_result, 1., 0.))
-                Pred = pred_result.cpu()
-                Gt = gt.cpu()
-                acc += torch.where(gt == pred_result, 1.0, 0.0).sum(dim=0).item()
-                conf_matrix = confusion_matrix(Pred, Gt, conf_matrix)
-                # conf_matrix = conf_matrix.cpu()
-            conf_matrix = np.array(conf_matrix.cpu())  # 将混淆矩阵从gpu转到cpu再转到np
-            corrects = conf_matrix.diagonal(offset=0)  # 抽取对角线的每种分类的识别正确个数
-            per_kinds = conf_matrix.sum(axis=1)
-
-            print("epoch:", ith_epoch)
-            print("accuracy", acc / len(val_data))
-            if ith_epoch == epoch - 1:
-                print("confusion matrix:", conf_matrix)
-            print(
-                "accuracy for each kind:{0}".format(
-                    [rate * 100 for rate in corrects / per_kinds]
-                )
-            )
-            accuracy.append(acc / len(val_data))
+            print('epoch:', ith_epoch)
+            print('ADE:', ade / len(val_data))
+            print('FDE', fde / len(val_data))
 
     loss_log = np.array(loss_log)
-    accuracy = np.array(accuracy)
-    np.save(model_dir + "/accuracy_log.npy", accuracy)
-
-    training_plot(loss_log.reshape(-1), accuracy, model_dir)
-
+    
     torch.save(
         model.state_dict(),
         model_dir + f"/model_parameter_{epoch}.pkl",
@@ -192,5 +163,5 @@ if __name__ == "__main__":
     with open(os.path.join(model_dir, "config.json"), 'w') as config_json:
         json.dump(hyperparams, config_json)
     print("model dir:", model_dir)
-
+    
     train(hyperparams, model_dir, load_checkpoint=False)
